@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>圖片管理器 V2.6</title>
+<title>圖片管理器 V2.7</title>
 <style>
 :root{
   --bg:#0a0c14; --surface:rgba(18,21,32,.58); --glass-panel:rgba(14,17,28,.44);
@@ -87,6 +87,8 @@ header .ver:hover{color:var(--accent2);border-color:var(--accent2)}
 #updBox{max-width:440px;width:88%;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;box-shadow:0 12px 44px rgba(0,0,0,.55)}
 #updTitle{font-weight:700;font-size:15px;margin-bottom:8px}
 #updNote{font-size:12.5px;color:var(--text2);line-height:1.7;margin-bottom:12px;white-space:pre-wrap;word-break:break-word}
+#updPathLine{font-size:12px;color:var(--text2);background:rgba(127,127,127,.14);border-radius:8px;padding:7px 10px;margin-bottom:12px;word-break:break-all;line-height:1.7}
+#updPathCopy{display:inline-block!important;width:auto!important;margin:4px 0 0 0!important;padding:2px 10px;font-size:11.5px}
 #updBox button{display:block;width:100%;margin:6px 0}
 #updGo{border-color:var(--accent2)}
 #updSmall{font-size:11px;color:var(--text3);margin-top:10px;line-height:1.6}
@@ -176,7 +178,7 @@ header .ver:hover{color:var(--accent2);border-color:var(--accent2)}
 </head>
 <body>
 <header>
-  <span class="logo">圖片管理器</span><span class="ver" id="verTag" title="點擊查看更新歷覽">V2.6</span>
+  <span class="logo">圖片管理器</span><span class="ver" id="verTag" title="點擊查看更新歷覽">V2.7</span>
   <button id="btnAdd" class="primary">＋ 新增資料夾</button>
   <button id="btnGrant" class="hidden">一鍵啟用權限</button>
   <button id="btnRescan" title="重新掃描目前資料夾">↻ 重新掃描</button>
@@ -223,10 +225,11 @@ header .ver:hover{color:var(--accent2);border-color:var(--accent2)}
 <div id="updMask" class="hidden"><div id="updBox">
   <div id="updTitle">🆕 有新版本</div>
   <div id="updNote"></div>
+  <div id="updPathLine" class="hidden">📂 這個檔案現在的位置：<span id="updPath"></span><br><button id="updPathCopy">📋 複製路徑</button>　第一次更新要選一次資料夾（把路徑貼在左下「資料夾:」欄按 Enter，再按「選擇資料夾」就一步跳到）。選過之後會記住，以後按「立即更新」直接蓋回原位，連資料夾都不用選。</div>
   <button id="updGo">🔄 立即更新（自動覆蓋這個檔案）</button>
   <button id="updSkip">🚫 跳過此版（之後出更新版本才再提醒）</button>
   <button id="updLater">⏱ 本次先不更新</button>
-  <div id="updSmall">更新與否完全自由：留在这儿繼續用現行版也沒問題，離線時不會有任何打擾。之後想更新隨時按 U。</div>
+  <div id="updSmall">更新與否完全自由：留在這裏繼續用現行版也沒問題，離線時不會有任何打擾。之後想更新隨時按 U。</div>
 </div></div>
 <div id="logMask" class="hidden"><div id="logBox">
   <div id="logTitle">📋 更新歷覽</div>
@@ -1671,7 +1674,7 @@ init();
    {"ver":"V2.5","note":"改了什麼","html":"https://host/Image_Manager_V1_glass.html"}
    版號比對：V2.5 > V2.4b > V2.4；本機等於或高於線上→不提醒；按「跳過此版」後直到出現更新版本才再提醒。
    按 U ＝隨時手動檢查。 */
-const APP_VER="V2.6";
+const APP_VER="V2.7";
 const UPDATE_JSON="https://raw.githubusercontent.com/lono2023/imgmgr/main/imversion.json";
 const UPDATE_HTML="https://raw.githubusercontent.com/lono2023/imgmgr/main/Image_Manager_V1_glass.html";
 const SELF_NAME="Image_Manager_V1_glass.html";
@@ -1705,15 +1708,49 @@ async function checkUpdate(force){
   if(!force&&(localStorage.getItem("imSkipVer")||"")===j.ver)return;
   showUpdDlg(j);
 }
+function selfDirHint(){
+  /* file:// 開啟時，網址列其实就是本機路徑，把它還原成「資料夾路徑」給用戶看 */
+  try{
+    if(location.protocol!=="file:")return "";
+    let p=decodeURIComponent(location.pathname);
+    if(/^\/[a-zA-Z]:/.test(p))return p.slice(1).replace(/\//g,"\\").replace(/\\[^\\]*$/,"");
+    if(p.startsWith("//"))return "\\\\"+p.slice(2).replace(/\//g,"\\").replace(/\\[^\\]*$/,"");
+    return p.replace(/\/[^/]*$/,"");
+  }catch(err){return ""}
+}
 function showUpdDlg(j){
   $("updTitle").textContent=`🆕 發現新版本：${j.ver}（現行 ${APP_VER}）`;
   $("updNote").textContent=j.note?("這次更新內容：\n"+j.note):"";
+  const dp=selfDirHint();
+  if(dp){
+    $("updPath").textContent=dp;
+    $("updPathLine").classList.remove("hidden");
+    $("updPathCopy").onclick=async()=>{
+      try{await navigator.clipboard.writeText(dp);toast("路徑已複製！選資料夾的視窗跳出後，在左下「資料夾:」欄按 Ctrl+V 貼上、按 Enter，再按「選擇資料夾」就定位","success")}
+      catch(err){toast("複製失敗，請用滑鼠選取上面那串路徑再按 Ctrl+C","warning")}
+    };
+  }else $("updPathLine").classList.add("hidden");
   $("updMask").classList.remove("hidden");
   $("updGo").onclick=()=>doUpdate(j);
   $("updSkip").onclick=()=>{localStorage.setItem("imSkipVer",j.ver);closeUpdDlg();toast(`已跳過 ${j.ver}，出更新版本才會再提醒你`,"success")};
   $("updLater").onclick=()=>{closeUpdDlg();toast("好，下次開起來才會再提醒")};
 }
 function closeUpdDlg(){$("updMask").classList.add("hidden")}
+async function getUpDir(){try{const v=await idbGet("meta","upDir");return v&&v.handle?v.handle:null}catch(err){return null}}
+async function overwriteInDir(dir,buf,j){
+  /* 核對該資料夾裡的同名檔案確實是本管理員，才覆蓋。回傳 "ok"／"nofile"／"notapp"／"bad" */
+  let fh=null;
+  try{fh=await dir.getFileHandle(SELF_NAME)}
+  catch(e2){if(e2&&e2.name==="NotFoundError")return "nofile";return "bad"}
+  try{
+    const head=await(await fh.getFile()).slice(0,400).text();
+    if(!head.includes("圖片管理器"))return "notapp";
+    const w=await fh.createWritable();await w.write(buf);await w.close();
+  }catch(err){return "bad"}
+  closeUpdDlg();toast(`已更新到 ${j.ver}，重新載入中…`,"success");
+  setTimeout(()=>location.reload(),900);
+  return "ok";
+}
 async function doUpdate(j){
   if(busy)return;
   const url=j.html||UPDATE_HTML||"";
@@ -1722,27 +1759,38 @@ async function doUpdate(j){
   try{toast("正在下載新版本…");buf=await(await fetchNoCache(url)).arrayBuffer()}
   catch(err){toast("下載新版失敗（離線或網址不對）","danger");return}
   if(!buf||buf.byteLength<20000){toast("下載到的檔案太小、看起來不對，沒有更新","danger");return}
-  // 優選：選「本程式檔案所在的資料夾」→原地覆蓋同名檔案，這個資料夾真的會用到（若此資料夾曾授權過，視窗會直接跳過挑選）
-  if(window.showDirectoryPicker)try{
-    toast(`請選擇「${SELF_NAME}」所在的資料夾（就是你雙擊開啟管理員的那個資料夾）；瀏覽器不讓選磁碟根目錄（例如 G:\\）`,"warning");
-    const dir=await showDirectoryPicker({id:"imgmgr_up",mode:"readwrite"});
-    let fh=null;
-    try{fh=await dir.getFileHandle(SELF_NAME)}
-    catch(e2){
-      // 選錯資料夾＝重來就好，不再悄悄轉存瀏覽器下載處（那個位置跟選的資料夾無關，容易造成誤會）
-      if(e2&&e2.name==="NotFoundError")toast(`你選的資料夾裡沒有 ${SELF_NAME}，沒有執行更新。請選對資料夾再按 U 更新一次`,"warning");
-      else toast("那個資料夾讀不到，沒有執行更新；請按 U 再試一次","warning");
-      return;
+  let saved=null;
+  if(window.showDirectoryPicker){
+    try{saved=await getUpDir()}catch(err){}
+    // 第一步：有「之前授權過的更新資料夾」就先用它——權限還在就直接原地覆蓋，連選資料夾的視窗都不用跳（最多一個「允許存取」小確認）
+    if(saved){
+      let st="prompt";
+      try{st=await saved.queryPermission({mode:"readwrite"})}catch(err){st="prompt"}
+      if(st!=="granted"){try{st=await saved.requestPermission({mode:"readwrite"})}catch(err){st="denied"}}
+      if(st==="granted"){
+        const r=await overwriteInDir(saved,buf,j);
+        if(r==="ok")return;
+        try{idbDel("meta","upDir")}catch(err){}   // 這個資料夾移走或內容不對了：清掉記錄，退回手動選夾
+      }
+      if(st==="denied")saved=null; // 之前按過「封鎖」，這次不再用它
     }
-    const head=await(await fh.getFile()).slice(0,400).text();
-    if(!head.includes("圖片管理器")){toast("那個資料夾裡的同名檔案不是本管理員，沒有執行更新","danger");return}
-    const w=await fh.createWritable();await w.write(buf);await w.close();
-    closeUpdDlg();toast(`已更新到 ${j.ver}，重新載入中…`,"success");
-    setTimeout(()=>location.reload(),900);
-    return;
-  }catch(err){
-    if(err&&err.name==="AbortError")return; // 你在資料夾視窗按了取消＝放棄更新，什麼都不做
-    // 其餘狀況（寫入被擋等）才退回瀏覽器下載
+    // 第二步：沒有記錄或沒拿到權限，才跳出選資料夾視窗（有舊記錄時視窗直接從那個資料夾打開）
+    try{
+      const dp=selfDirHint();
+      toast(dp?`請選這個資料夾：${dp}　（貼在視窗左下「資料夾:」欄按 Enter 一步跳到，再按「選擇資料夾」）；瀏覽器不讓選磁碟根目錄（例如 G:\\）`:`請選擇「${SELF_NAME}」所在的資料夾（就是你雙擊開啟管理員的那個資料夾）；瀏覽器不讓選磁碟根目錄（例如 G:\\）`,"warning");
+      const opt={id:"imgmgr_up",mode:"readwrite"};
+      if(saved)try{opt.startIn=saved}catch(err){}
+      const dir=await showDirectoryPicker(opt);
+      const r=await overwriteInDir(dir,buf,j);
+      if(r==="nofile"){toast(`你選的資料夾裡沒有 ${SELF_NAME}，沒有執行更新。請選對資料夾再按 U 更新一次`,"warning");return}
+      if(r==="notapp"){toast("那個資料夾裡的同名檔案不是本管理員，沒有執行更新","danger");return}
+      if(r!=="ok"){toast("那個資料夾讀不到，沒有執行更新；請按 U 再試一次","warning");return}
+      try{await idbPut("meta",{k:"upDir",handle:dir})}catch(err){}  // 記住這個資料夾：以後按「立即更新」直接原地覆蓋、不用再選
+      return;
+    }catch(err){
+      if(err&&err.name==="AbortError")return; // 你在資料夾視窗按了取消＝放棄更新，什麼都不做
+      // 其餘狀況（寫入被擋等）才退回瀏覽器下載
+    }
   }
   // 退回：環境不支援原地覆蓋或寫入被擋→存到瀏覽器自己的下載位置。位置由瀏覽器設定決定、跟剛才有沒有選資料夾無關，這裡一次講清
   try{
@@ -1756,6 +1804,7 @@ document.addEventListener("keydown",ev=>{
 });
 /* ---------- V2.5：點左上角版號徽章→彈出更新歷覽（內建資料，離線也能看） ---------- */
 const CHANGELOG=[
+ ["V2.7","1. 【更新更好用】本機開啟時，發現新版的視窗會直接顯示「這個檔案現在的位置」（例如 G:\\圖片管理器）＋📋複製路徑 按鈕；第一次要選資料夾時，把路徑貼在視窗左下「資料夾:」欄按 Enter 就能一步跳到，不用再從「文件」慢慢找。\n2. 【更新會記住】第一次更新選過的資料夾會被記下來；以後按「立即更新」會直接蓋回原位、連選資料夾都不用跳，最多只彈一個「允許存取」的小確認（某些情況連這個都不彈）。\n3. 若資料夾搬家或改名導致記的路徑失效，會自動退回手動選一次，並從舊位置幫你打開視窗。\n4. 從網頁版（非本機檔案）開啟時不顯示路徑列，行為跟以前一樣。"],
  ["V2.6","1. 【重要修正】把本機圖片拖到別的資料夾搬移後，圖片明明搬走了卻出現一個名為 [object Object] 的檔案——這是不同瀏覽器對「搬移」動作的實作不同，把檔案錯誤改名留在原處。現在搬完一定會核對檔案真的到了目標資料夾，不對就自動用原檔名複製過去、再清掉來源的殘留檔，絕不再亂改名。\n2. 之前被這問題嚇到的人請放心：圖片沒有丟失。那個 [object Object] 就是你那批的第一張，把檔名改回原來的（例如 .jpg）就能開；其他張其實都已用原名搬到目標資料夾了。\n3. 拖放單選或複選搬移、批次搬移／複製對話框全部適用同一套安全邏輯。"],
  ["V2.5b","1. 修正「立即更新」的邏輯錯誤：選錯資料夾時會直接告訴你並請你重選，不再不動聲色地把新版塞進瀏覽器的下載位置（那位置跟選的資料夾無關，之前造成很大誤會）。\n2. 只有真的寫不進去（瀏覽器擋掉寫入）才退回瀏覽器下載，且訊息會完整說明儲存位置和該手動蓋哪個檔案。\n3. 更新用的資料夾授權改成獨立記錄，不再跟選圖片資料夾混在一起。"],
  ["V2.5","1. 點擊左上角版號徽章即可開啟這個更新歷覽視窗，隨時查看各版本改動（離線也能看）。\n2. 之後每次發新版，記得在下方 CHANGELOG 和 imversion.json 的 note 裡各寫一份更新說明。"],
