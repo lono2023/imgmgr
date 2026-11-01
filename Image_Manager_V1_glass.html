@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>圖片管理器 V2.5</title>
+<title>圖片管理器 V2.5b</title>
 <style>
 :root{
   --bg:#0a0c14; --surface:rgba(18,21,32,.58); --glass-panel:rgba(14,17,28,.44);
@@ -176,7 +176,7 @@ header .ver:hover{color:var(--accent2);border-color:var(--accent2)}
 </head>
 <body>
 <header>
-  <span class="logo">圖片管理器</span><span class="ver" id="verTag" title="點擊查看更新歷覽">V2.5</span>
+  <span class="logo">圖片管理器</span><span class="ver" id="verTag" title="點擊查看更新歷覽">V2.5b</span>
   <button id="btnAdd" class="primary">＋ 新增資料夾</button>
   <button id="btnGrant" class="hidden">一鍵啟用權限</button>
   <button id="btnRescan" title="重新掃描目前資料夾">↻ 重新掃描</button>
@@ -243,7 +243,7 @@ function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",
 function errText(e){return e&&e.message?String(e.message):String(e)}
 function fmtSize(b){if(!b)return"";if(b<1024)return b+" B";if(b<1048576)return (b/1024).toFixed(1)+" KB";return (b/1048576).toFixed(2)+" MB"}
 function fmtTime(ms){if(!ms)return"";const d=new Date(ms),p=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes())}
-function toast(msg,type){const t=document.createElement("div");t.className="toast"+(type?" "+type:"");t.textContent=msg;$("toasts").appendChild(t);setTimeout(()=>{t.style.opacity="0";t.style.transition="opacity .3s";setTimeout(()=>t.remove(),350)},type==="danger"?5200:2800)}
+function toast(msg,type){const t=document.createElement("div");t.className="toast"+(type?" "+type:"");t.textContent=msg;$("toasts").appendChild(t);setTimeout(()=>{t.style.opacity="0";t.style.transition="opacity .3s";setTimeout(()=>t.remove(),350)},type==="danger"?5200:type==="warning"?7500:2800)}
 function uid(){return (crypto.randomUUID?crypto.randomUUID():"f"+Date.now()+"_"+Math.random().toString(36).slice(2))}
 async function copyText(t){try{await navigator.clipboard.writeText(t)}catch(err){const ta=document.createElement("textarea");ta.value=t;document.body.appendChild(ta);ta.select();try{document.execCommand("copy")}catch(e2){}ta.remove()}toast("已複製到剪貼簿","success")}
 
@@ -1654,7 +1654,7 @@ init();
    {"ver":"V2.5","note":"改了什麼","html":"https://host/Image_Manager_V1_glass.html"}
    版號比對：V2.5 > V2.4b > V2.4；本機等於或高於線上→不提醒；按「跳過此版」後直到出現更新版本才再提醒。
    按 U ＝隨時手動檢查。 */
-const APP_VER="V2.5";
+const APP_VER="V2.5b";
 const UPDATE_JSON="https://raw.githubusercontent.com/lono2023/imgmgr/main/imversion.json";
 const UPDATE_HTML="https://raw.githubusercontent.com/lono2023/imgmgr/main/Image_Manager_V1_glass.html";
 const SELF_NAME="Image_Manager_V1_glass.html";
@@ -1705,11 +1705,18 @@ async function doUpdate(j){
   try{toast("正在下載新版本…");buf=await(await fetchNoCache(url)).arrayBuffer()}
   catch(err){toast("下載新版失敗（離線或網址不對）","danger");return}
   if(!buf||buf.byteLength<20000){toast("下載到的檔案太小、看起來不對，沒有更新","danger");return}
-  // 首选：選到本檔案所在資料夾→原地覆蓋同名檔案（若該目錄已授權過，視窗會直接跳過挑選）
-  try{
-    toast("請選擇「本程式檔案所在的資料夾」以完成原地覆蓋");
-    const dir=await showDirectoryPicker({id:"imgmgr",mode:"readwrite"});
-    const fh=await dir.getFileHandle(SELF_NAME);
+  // 優選：選「本程式檔案所在的資料夾」→原地覆蓋同名檔案，這個資料夾真的會用到（若此資料夾曾授權過，視窗會直接跳過挑選）
+  if(window.showDirectoryPicker)try{
+    toast(`請選擇「${SELF_NAME}」所在的資料夾（就是你雙擊開啟管理員的那個資料夾）；瀏覽器不讓選磁碟根目錄（例如 G:\\）`,"warning");
+    const dir=await showDirectoryPicker({id:"imgmgr_up",mode:"readwrite"});
+    let fh=null;
+    try{fh=await dir.getFileHandle(SELF_NAME)}
+    catch(e2){
+      // 選錯資料夾＝重來就好，不再悄悄轉存瀏覽器下載處（那個位置跟選的資料夾無關，容易造成誤會）
+      if(e2&&e2.name==="NotFoundError")toast(`你選的資料夾裡沒有 ${SELF_NAME}，沒有執行更新。請選對資料夾再按 U 更新一次`,"warning");
+      else toast("那個資料夾讀不到，沒有執行更新；請按 U 再試一次","warning");
+      return;
+    }
     const head=await(await fh.getFile()).slice(0,400).text();
     if(!head.includes("圖片管理器")){toast("那個資料夾裡的同名檔案不是本管理員，沒有執行更新","danger");return}
     const w=await fh.createWritable();await w.write(buf);await w.close();
@@ -1717,12 +1724,13 @@ async function doUpdate(j){
     setTimeout(()=>location.reload(),900);
     return;
   }catch(err){
-    if(err&&(err.name==="AbortError"||err.name==="NotAllowedError"))return;
+    if(err&&err.name==="AbortError")return; // 你在資料夾視窗按了取消＝放棄更新，什麼都不做
+    // 其餘狀況（寫入被擋等）才退回瀏覽器下載
   }
-  // 退回：無法原地覆蓋→存到瀏覽器下載資料夾，請使用者自行蓋回去
+  // 退回：環境不支援原地覆蓋或寫入被擋→存到瀏覽器自己的下載位置。位置由瀏覽器設定決定、跟剛才有沒有選資料夾無關，這裡一次講清
   try{
     const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([buf],{type:"text/html"}));a.download=SELF_NAME;document.body.appendChild(a);a.click();a.remove();
-    closeUpdDlg();toast(`新版已存到瀏覽器下載資料夾，請用它覆蓋原來的 ${SELF_NAME}`,"warning");
+    closeUpdDlg();toast(`無法原地覆蓋，新版已存到瀏覽器的下載位置（位置由瀏覽器決定，通常在「下載」資料夾）。請找到剛下載的 ${SELF_NAME}，手動複製回管理員的資料夾覆蓋原檔案`,"warning");
   }catch(err){toast("更新失敗，請手動下載新版檔案","danger")}
 }
 document.addEventListener("keydown",ev=>{
@@ -1731,6 +1739,7 @@ document.addEventListener("keydown",ev=>{
 });
 /* ---------- V2.5：點左上角版號徽章→彈出更新歷覽（內建資料，離線也能看） ---------- */
 const CHANGELOG=[
+ ["V2.5b","1. 修正「立即更新」的邏輯錯誤：選錯資料夾時會直接告訴你並請你重選，不再不動聲色地把新版塞進瀏覽器的下載位置（那位置跟選的資料夾無關，之前造成很大誤會）。\n2. 只有真的寫不進去（瀏覽器擋掉寫入）才退回瀏覽器下載，且訊息會完整說明儲存位置和該手動蓋哪個檔案。\n3. 更新用的資料夾授權改成獨立記錄，不再跟選圖片資料夾混在一起。"],
  ["V2.5","1. 點擊左上角版號徽章即可開啟這個更新歷覽視窗，隨時查看各版本改動（離線也能看）。\n2. 之後每次發新版，記得在下方 CHANGELOG 和 imversion.json 的 note 裡各寫一份更新說明。"],
  ["V2.4","1. 新增自動更新機制：開起來靜默檢查新版（6.5 秒沒回應就當離線，完全不打擾）。\n2. 發現新版只彈窗詢問：🔄立即更新（自動下載並原地覆蓋）／🚫跳過此版／⏱本次先不更新，絕不強制。\n3. 按 U 可隨時手動檢查更新。"],
  ["V2.3b","移除「其他資料夾」：側欄不再固定顯示磁碟其他目錄、避免誤點大目錄，要用時按「新建資料夾」自行加入即可。"],

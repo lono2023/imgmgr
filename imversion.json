@@ -1,1 +1,1 @@
-{"ver": "V2.5", "note": "V2.5：1. 點左上角版號徽章即可開啟「更新歷覽」視窗，隨時查看各版本改動（離線也能看）。\n2. 之後發新版時，記得在程式內 CHANGELOG 與這裡的 note 各寫一份更新說明。\n3. 舊版（V2.4）一樣按 U 或開起來自動檢查就能拿到本版。", "html": "https://raw.githubusercontent.com/lono2023/imgmgr/main/Image_Manager_V1_glass.html"}
+{"ver": "V2.5b", "note": "V2.5b：1. 修正「立即更新」的邏輯錯誤：選錯資料夾時會直接告訴你並請你重選，不再不動聲色地把新版塞進瀏覽器的下載位置（那位置跟選的資料夾無關，之前造成很大誤會）。\n2. 只有真的寫不進去（瀏覽器擋掉寫入）才退回瀏覽器下載，且訊息會完整說明儲存位置和該手動蓋哪個檔案。\n3. 更新用的資料夾授權改成獨立記錄，第一次按立即更新會重新選一次資料夾，之後就記住。", "html": "https://raw.githubusercontent.com/lono2023/imgmgr/main/Image_Manager_V1_glass.html"}
