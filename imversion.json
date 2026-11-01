@@ -1,5 +1,1 @@
-{
- "ver": "V2.4",
- "note": "V2.4：新增自動更新機制（開起來靜默檢查新版、彈窗可選立即更新／跳過此版／本次先不更新、離線完全不影響、按 U 手動檢查；4 個網路圖廊與資料夾收合功能見 V2.2~V2.3）。",
- "html": "https://raw.githubusercontent.com/lono2023/imgmgr/main/Image_Manager_V1_glass.html"
-}
+{"ver": "V2.5", "note": "V2.5：1. 點左上角版號徽章即可開啟「更新歷覽」視窗，隨時查看各版本改動（離線也能看）。\n2. 之後發新版時，記得在程式內 CHANGELOG 與這裡的 note 各寫一份更新說明。\n3. 舊版（V2.4）一樣按 U 或開起來自動檢查就能拿到本版。", "html": "https://raw.githubusercontent.com/lono2023/imgmgr/main/Image_Manager_V1_glass.html"}

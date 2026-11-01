@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>圖片管理器 V2.4</title>
+<title>圖片管理器 V2.5</title>
 <style>
 :root{
   --bg:#0a0c14; --surface:rgba(18,21,32,.58); --glass-panel:rgba(14,17,28,.44);
@@ -39,7 +39,18 @@ select option{background:#12141f;color:var(--text)}
 
 header{display:flex;align-items:center;gap:10px;padding:10px 14px;flex-wrap:wrap;border-bottom:1px solid var(--line);background:var(--glass-panel);backdrop-filter:blur(16px)}
 header .logo{font-weight:700;font-size:16px;background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent;white-space:nowrap}
-header .ver{font-size:10px;color:var(--text3);border:1px solid var(--line);border-radius:6px;padding:1px 6px}
+header .ver{font-size:10px;color:var(--text3);border:1px solid var(--line);border-radius:6px;padding:1px 6px;cursor:pointer;user-select:none;transition:all .15s}
+header .ver:hover{color:var(--accent2);border-color:var(--accent2)}
+#logMask{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:210}
+#logBox{max-width:520px;width:88%;max-height:82vh;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 20px;box-shadow:0 12px 44px rgba(0,0,0,.55)}
+#logTitle{font-weight:700;font-size:15px;margin-bottom:10px;flex:none}
+#logBody{overflow-y:auto;flex:1;padding-right:4px}
+.logitem{margin-bottom:12px;padding:8px 10px;border-radius:8px;border:1px solid var(--line)}
+.logitem.cur{border-color:var(--accent2);background:rgba(124,140,255,.07)}
+.logver{font-weight:700;font-size:12.5px;margin-bottom:3px}
+.logitem.cur .logver{color:var(--accent2)}
+.lognote{font-size:12px;color:var(--text2);line-height:1.7;white-space:pre-wrap;word-break:break-word}
+#logClose{margin-top:10px;flex:none}
 #hstat{font-size:12px;color:var(--text2);flex:1;min-width:80px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #q{width:180px}
 
@@ -165,7 +176,7 @@ header .ver{font-size:10px;color:var(--text3);border:1px solid var(--line);borde
 </head>
 <body>
 <header>
-  <span class="logo">圖片管理器</span><span class="ver">V2.4</span>
+  <span class="logo">圖片管理器</span><span class="ver" id="verTag" title="點擊查看更新歷覽">V2.5</span>
   <button id="btnAdd" class="primary">＋ 新增資料夾</button>
   <button id="btnGrant" class="hidden">一鍵啟用權限</button>
   <button id="btnRescan" title="重新掃描目前資料夾">↻ 重新掃描</button>
@@ -216,6 +227,11 @@ header .ver{font-size:10px;color:var(--text3);border:1px solid var(--line);borde
   <button id="updSkip">🚫 跳過此版（之後出更新版本才再提醒）</button>
   <button id="updLater">⏱ 本次先不更新</button>
   <div id="updSmall">更新與否完全自由：留在这儿繼續用現行版也沒問題，離線時不會有任何打擾。之後想更新隨時按 U。</div>
+</div></div>
+<div id="logMask" class="hidden"><div id="logBox">
+  <div id="logTitle">📋 更新歷覽</div>
+  <div id="logBody"></div>
+  <button id="logClose">關閉</button>
 </div></div>
 <div id="toasts"></div>
 <script>
@@ -1638,7 +1654,7 @@ init();
    {"ver":"V2.5","note":"改了什麼","html":"https://host/Image_Manager_V1_glass.html"}
    版號比對：V2.5 > V2.4b > V2.4；本機等於或高於線上→不提醒；按「跳過此版」後直到出現更新版本才再提醒。
    按 U ＝隨時手動檢查。 */
-const APP_VER="V2.4";
+const APP_VER="V2.5";
 const UPDATE_JSON="https://raw.githubusercontent.com/lono2023/imgmgr/main/imversion.json";
 const UPDATE_HTML="https://raw.githubusercontent.com/lono2023/imgmgr/main/Image_Manager_V1_glass.html";
 const SELF_NAME="Image_Manager_V1_glass.html";
@@ -1713,6 +1729,31 @@ document.addEventListener("keydown",ev=>{
   if(ev.key&&ev.key.toLowerCase()==="u"&&!(ev.ctrlKey||ev.metaKey||ev.altKey)&&!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName))
     {ev.preventDefault();checkUpdate(true)}
 });
+/* ---------- V2.5：點左上角版號徽章→彈出更新歷覽（內建資料，離線也能看） ---------- */
+const CHANGELOG=[
+ ["V2.5","1. 點擊左上角版號徽章即可開啟這個更新歷覽視窗，隨時查看各版本改動（離線也能看）。\n2. 之後每次發新版，記得在下方 CHANGELOG 和 imversion.json 的 note 裡各寫一份更新說明。"],
+ ["V2.4","1. 新增自動更新機制：開起來靜默檢查新版（6.5 秒沒回應就當離線，完全不打擾）。\n2. 發現新版只彈窗詢問：🔄立即更新（自動下載並原地覆蓋）／🚫跳過此版／⏱本次先不更新，絕不強制。\n3. 按 U 可隨時手動檢查更新。"],
+ ["V2.3b","移除「其他資料夾」：側欄不再固定顯示磁碟其他目錄、避免誤點大目錄，要用時按「新建資料夾」自行加入即可。"],
+ ["V2.3","1. 內建角色參考圖廊：843 個角色、1308 筆圖（髮型／臉／體型／姿勢／表情五大類），跟本機圖一起搜尋瀏覽。\n2. 每張圖標示拍攝角度（正面／側面／背面…），一鍵複製中文+英文角度標籤，直接貼進 AI 繪圖提示詞。"],
+ ["V2.2","1. 側欄新增 4 個網路圖廊（線上圖源直接瀏覽、圖會存進本機資料夾）。\n2. 側欄資料夾樹支援逐層收合／展開。"],
+ ["V1~V2.1","基礎功能：本機資料夾圖片管理、縮圖牆、標籤／評分／搜尋、大图預覽、複製路徑等；V2.1 為穩定性與效能修復版。"]
+];
+function showLogDlg(){
+  $("logTitle").textContent="📋 更新歷覽（現行 "+APP_VER+"）";
+  let h="";
+  CHANGELOG.forEach(c=>{
+    const cur=c[0]===APP_VER;
+    h+=`<div class="logitem${cur?" cur":""}"><div class="logver">${esc(c[0])}${cur?"　👈 現行版":""}</div><div class="lognote">${esc(c[1])}</div></div>`;
+  });
+  $("logBody").innerHTML=h;$("logBody").scrollTop=0;
+  $("logMask").classList.remove("hidden");
+}
+function closeLogDlg(){$("logMask").classList.add("hidden")}
+$("verTag").textContent=APP_VER;  // 徽章跟著 APP_VER 走，未來改版號只改一處
+$("verTag").onclick=showLogDlg;
+$("logClose").onclick=closeLogDlg;
+$("logMask").onclick=ev=>{if(ev.target===$("logMask"))closeLogDlg()};
+document.addEventListener("keydown",ev=>{if(ev.key==="Escape"&&!$("logMask").classList.contains("hidden")){ev.stopPropagation();ev.preventDefault();closeLogDlg()}},true);
 setTimeout(()=>checkUpdate(false),1600);
 </script>
 </body>
