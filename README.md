@@ -4,7 +4,7 @@
 
 ![預覽](docs/images/shot-02-gallery.png)
 
-[![version](https://img.shields.io/badge/版本-V2.9-blue)]() ![platform](https://img.shields.io/badge/支援-Edge．Chrome-green)
+[![version](https://img.shields.io/badge/版本-V2.10-blue)]() ![platform](https://img.shields.io/badge/支援-Edge．Chrome-green)
 
 <br>
 

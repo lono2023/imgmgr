@@ -307,7 +307,7 @@ async function parsePngTextChunks(buf){
 /* ---------- ComfyUI API 工作流（prompt chunk） ---------- */
 function comfyFromApiGraph(g){
   const pos=[],neg=[],st={};
-  const PN=/^(CLIPTextEncode|PrimitiveString|StringLiteral|TextMultiline|PromptSchedule)|TextEncode|FreePose|promptLine/i;
+  const PN=/^(CLIPTextEncode|PrimitiveString|StringLiteral|TextMultiline|PromptSchedule)|TextEncode|FreePose|promptLine|Conditioning|TextGenerate/i;
   const SKIP=/GetNode|SetNode|Note|Markdown|SaveImage|PreviewImage/i;
   const seenP=new Set(),seenN=new Set();
   Object.keys(g||{}).forEach(k=>{
@@ -326,8 +326,9 @@ function comfyFromApiGraph(g){
       st.loras=st.loras||[];
       st.loras.push({name:String(n.inputs.lora_name),strength:pngNum(n.inputs.strength_ratio!=null?n.inputs.strength_ratio:n.inputs.strength)});
     }
-    if(/CheckpointLoader|UnetLoader/i.test(ct)&&n.inputs&&typeof n.inputs.ckpt_name==="string")st.model=String(n.inputs.ckpt_name);
+    if(/CheckpointLoader|UnetLoader/i.test(ct)&&n.inputs){const mn=typeof n.inputs.ckpt_name==="string"?n.inputs.ckpt_name:(typeof n.inputs.unet_name==="string"?n.inputs.unet_name:"");if(mn)st.model=mn}
     if(/DualCLIPLoader/i.test(ct)&&n.inputs&&typeof n.inputs.clip_name1==="string")st.clip=String(n.inputs.clip_name1);
+    else if(/CLIPLoader/i.test(ct)&&n.inputs&&typeof n.inputs.clip_name==="string")st.clip=String(n.inputs.clip_name);
     if(!PN.test(ct)||SKIP.test(ct))return;
     const ins=n.inputs||{};
     Object.keys(ins).forEach(ik=>{
@@ -351,7 +352,7 @@ function comfyFromWorkflow(w){
     if(!n||typeof n!=="object")return;
     const type=String(n.type||""),title=String((n.properties&&n.properties.node_title)||n.title||"");
     const wv=Array.isArray(n.widgets_values)?n.widgets_values:[];
-    const isP=/^(CLIPTextEncode|PrimitiveString|StringLiteral|TextMultiline|PromptSchedule)|TextEncode|FreePose|promptLine/i.test(type)||/prompt|正面|正向|負面|反面|負向/i.test(title);
+    const isP=/^(CLIPTextEncode|PrimitiveString|StringLiteral|TextMultiline|PromptSchedule)|TextEncode|FreePose|promptLine|Conditioning/i.test(type)||/prompt|正面|正向|負面|反面|負向/i.test(title);
     if(isP&&!/Sampler|Loader|Save|Preview|Note/i.test(type)){
       const isNeg=PNG_NEG_RE.test(title)||/negative/i.test(type);
       const box=isNeg?neg:pos;
@@ -418,7 +419,7 @@ function pngFieldsFromApi(g){
     const ct=String(n.class_type),title=String((n._meta&&n._meta.title)||"");
     Object.keys(n.inputs||{}).forEach(ik=>{
       const v=n.inputs[ik];
-      if(typeof v==="string"&&v.trim().length>1&&!/^\s*[[{]/.test(v))
+      if(typeof v==="string"&&ik!=="seed"&&ik!=="noise_seed"&&v.trim().length>1&&!/^\s*[[{]/.test(v))
         rows.push({node:"#"+k+" "+ct,title,key:ik,text:v.trim().slice(0,2e4),neg:PNG_NEG_RE.test(ik)||PNG_NEG_RE.test(title)});
     });
   });
@@ -445,7 +446,8 @@ async function extractPngInfo(file){
   const rawKeys=Object.keys(ch);
   let positive="",negative="",st=null,source="",fields=null;
   if(ch.prompt){
-    try{const g=JSON.parse(String(ch.prompt));const r=comfyFromApiGraph(g);
+    // 19 位 seed 超過 JS 安全整數，parse 前先包成字串保住精度
+    try{const g=JSON.parse(String(ch.prompt).replace(/"(seed|noise_seed)"\s*:\s*(\d{16,})\b/g,'"$1":"$2"'));const r=comfyFromApiGraph(g);
       if(r.positive||r.negative){positive=r.positive;negative=r.negative;st=r.st;source="ComfyUI";fields=pngFieldsFromApi(g)}
       else if(!fields&&rawKeys.includes("workflow")){try{fields=pngFieldsFromWorkflow(JSON.parse(String(ch.workflow)))}catch(e2){}}
     }catch(err){}
@@ -1569,7 +1571,7 @@ async function loadInfo(e){
   const cached=metaMap.get(e.key);
   if(e.info&&e.info.__sig&&cached&&cached.sig===e.info.__sig)return e.info;
   const file=await e.handle.getFile();
-  let sig=file.size+":"+(file.lastModified||0);
+  let sig="p2:"+file.size+":"+(file.lastModified||0);   // p2:＝V2.10 解析器改版（MiniMax 提示詞修復），讓舊快取自動作廢重解析一次
   let sf=null;
   if(e.sidecar){try{sf=await e.sidecar.getFile();sig+=":j"+sf.size}catch(err){sf=null}}
   if(cached&&cached.sig===sig){e.info=cached.info;if(e.info)e.info.__sig=sig;updateCardBadge(e);return e.info}
@@ -1843,7 +1845,7 @@ init();
    {"ver":"V2.5","note":"改了什麼","html":"https://host/Image_Manager_V1_glass.html"}
    版號比對：V2.5 > V2.4b > V2.4；本機等於或高於線上→不提醒；按「跳過此版」後直到出現更新版本才再提醒。
    按 U ＝隨時手動檢查。 */
-const APP_VER="V2.9";
+const APP_VER="V2.10";
 const UPDATE_JSON="https://raw.githubusercontent.com/lono2023/imgmgr/main/imversion.json";
 const UPDATE_HTML="https://raw.githubusercontent.com/lono2023/imgmgr/main/Image_Manager_V1_glass.html";
 const SELF_NAME="Image_Manager_V1_glass.html";
@@ -1973,6 +1975,7 @@ document.addEventListener("keydown",ev=>{
 });
 /* ---------- V2.5：點左上角版號徽章→彈出更新歷覽（內建資料，離線也能看） ---------- */
 const CHANGELOG=[
+ ["V2.10","1. 【MiniMax H3 提示詞讀到了】用 MiniMax H3（ComfyUI 工作流）生成的圖片，內嵌提示詞過去會顯示「未找到提示詞」，現在能正常顯示與複製。\n2. 【一般自訂節點同樣生效】其他把提示詞寫在 Conditioning 類節點裡的工作流（不只 MiniMax），提示詞也一起讀得到。\n3. 【生成資訊更完整】改用 GGUF 載入器（UnetLoaderGGUF）或獨立 CLIPLoader 的工作流，詳情裡現在也會顯示模型與 CLIP 名稱。\n4. 【舊快取自動更新】之前掃過的圖片會自動重新解析一次，不用手動清快取——以前顯示「未找到提示詞」的圖，重開詳情面板就會正常顯示。"],
  ["V2.9","1. 【外部網站圖庫分組】左側網站清單分成兩組：🧍 真人圖庫（深度圖庫、服裝圖庫、素体庫、人物圖庫）與 🎨 二次元圖庫（綜合圖庫、衣裝庫），不再擠成一長串。\n2. 【站名精簡】AI 姿勢圖庫→素体庫、AI 服裝圖庫→服裝圖庫、二次元圖庫→綜合圖庫（只改顯示名稱，你之前的勾選與折疊狀態都會保留）。\n3. 【新增衣裝庫】二次元衣裝圖庫上線：1320 套角色衣裝（春／夏／秋／冬／ランジェリー／パーティ／水着／セクシー 八類），縮圖直接看、詳情面板可複製生成提示詞，下載存的是原寸 PNG。\n4. 【虛擬資料夾預設收起子樹】網站圖庫載入後左側樹全部收起，點資料夾名或節點前的 ▸ 才展開，側欄不再被撐得很長。\n5. 【圖庫即開即用】勾選網站圖庫後立刻完成載入（不再一直顯示「載入中…」），左側直接顯示張數與分類節點；取消勾選時側欄也會立即刷新、狀態確實保存。"],
  ["V2.8","1. 【拖曳搬移徹底修好】把圖片從一個資料夾拖到另一個資料夾，檔名不再變成 [object Object]，也不會再搬出一堆 0 字節的空檔案（那個空檔案問題是上一版修 [object Object] 時連帶造成的，這次一起處理乾淨）。\n2. 【搬移換成穩的做法】本機資料夾之間不再依賴瀏覽器尚未支援好的搬移指令，改為「複製到目的地 → 核對檔案大小 → 才刪除來源」；任何一步不對都會保留來源圖片，不會發生兩邊都不見。\n3. 【權限檢查更完整】搬移前會同時確認來源與目的地兩個資料夾的讀寫權限，失效時會明確告訴你該按哪一邊的「🔑 重新授權」，不會再出現寫得過去、刪不掉來源的怪情況。\n4. 【錯誤訊息會說原因】失敗時會顯示實際原因（例如 NotFoundError、NotAllowedError，還有是哪一張圖），不再只有一句「搬移失敗」。\n5. 舊版遺留的 [object Object] 和 0 字節空檔不會自動刪除，請自行在檔案總管清理；新版搬移不會再產生新的。\n6. 更新方式跟以前一樣，按「立即更新」會直接蓋回原位，不需額外操作。"],
  ["V2.7","1. 【更新更好用】本機開啟時，發現新版的視窗會直接顯示「這個檔案現在的位置」（例如 G:\\圖片管理器）＋📋複製路徑 按鈕；第一次要選資料夾時，把路徑貼在視窗左下「資料夾:」欄按 Enter 就能一步跳到，不用再從「文件」慢慢找。\n2. 【更新會記住】第一次更新選過的資料夾會被記下來；以後按「立即更新」會直接蓋回原位、連選資料夾都不用跳，最多只彈一個「允許存取」的小確認（某些情況連這個都不彈）。\n3. 若資料夾搬家或改名導致記的路徑失效，會自動退回手動選一次，並從舊位置幫你打開視窗。\n4. 從網頁版（非本機檔案）開啟時不顯示路徑列，行為跟以前一樣。"],
